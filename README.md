@@ -19,17 +19,16 @@ References: CREATE NOTEBOOK syntax is used per Snowflake docs ([CREATE NOTEBOOK]
 ---
 
 ## Repository layout
-- `tools/codelab_to_notebook.py` — Python converter. Supports:
-  - Input: local path, URL, or @stage path (stage requires a Snowflake session)
-  - Output: local path or @stage path. When writing to a stage (with a Snowflake session present), the script uploads the `.ipynb` via PUT and issues a `CREATE NOTEBOOK <name> FROM '<stage_root>' MAIN_FILE = '<relative_path>' [QUERY_WAREHOUSE = ...];` command.
-- `sql/snowflake_create_sp_convert_codelab.sql` — SQL to create a Python stored procedure `CONVERT_CODELAB_TO_NOTEBOOK` in Snowflake with the same functionality (stage input/output, PUT, then CREATE NOTEBOOK). It also includes a permissive external access integration example for fetching markdown over HTTPS.
+- `tools/codelab_to_notebook.py` — Standalone Python converter. Supports:
+  - Input: local path or URL
+  - Output: local path
+- `sql/snowflake_create_sp_convert_codelab.sql` — SQL script to create a Python stored procedure `CONVERT_CODELAB_TO_NOTEBOOK` in Snowflake with the same functionality (With added stage input/output, PUT, then CREATE NOTEBOOK). It also includes a permissive external access integration example for fetching markdown over HTTPS.
 
 ---
 
 ## Local usage (CLI)
 Requirements:
 - Python 3.10+
-- If you plan to use @stage input/output locally, your environment must provide a Snowflake Snowpark session (typically not available; for stage I/O prefer the stored procedure below).
 
 Examples:
 
@@ -44,21 +43,9 @@ python3 tools/codelab_to_notebook.py \
 ```bash
 python3 tools/codelab_to_notebook.py path/to/guide.md out.ipynb
 ```
-
-3) Convert from URL and write to a stage (requires a Snowflake session in the environment):
-```bash
-python3 tools/codelab_to_notebook.py \
-  https://example.com/guide.md \
-  @MY_DB.MY_SCHEMA.MY_STAGE/notebooks
-```
-When writing to a stage, the script:
-- Writes the notebook to a temp file
-- PUTs it to the stage
-- Issues `CREATE NOTEBOOK <safe_name> FROM '@MY_DB.MY_SCHEMA.MY_STAGE' MAIN_FILE = 'notebooks/<file>.ipynb'` and optionally sets `QUERY_WAREHOUSE` if provided within a Snowflake session.
-
 ---
 
-## In-Snowflake usage (recommended for stage I/O)
+## In-Snowflake usage
 
 ### 1) Create the stored procedure
 Run the SQL file (adjust role/DB/schema as needed). The file creates:
@@ -74,6 +61,8 @@ USE SCHEMA <your_schema>;
 !source sql/snowflake_create_sp_convert_codelab.sql
 ```
 
+Or pull this repo into a workspace and run the SQL file from there.
+
 The procedure signature is:
 ```sql
 CONVERT_CODELAB_TO_NOTEBOOK(
@@ -87,7 +76,7 @@ CONVERT_CODELAB_TO_NOTEBOOK(
 ### 2) Call the procedure
 ```sql
 CALL CONVERT_CODELAB_TO_NOTEBOOK(
-  '@MY_DB.MY_SCHEMA.MY_STAGE/zero_to_snowflake/zero_to_snowflake.md',
+  'https://raw.githubusercontent.com/Snowflake-Labs/sfquickstarts/refs/heads/master/site/sfguides/src/zero_to_snowflake/zero_to_snowflake.md',
   '@MY_DB.MY_SCHEMA.MY_STAGE/notebooks',
   'Zero_to_Snowflake.ipynb',
   'MY_WH'
@@ -97,7 +86,7 @@ What it does:
 - Reads the markdown (from stage or URL)
 - Converts to `.ipynb`
 - Writes the file to the specified stage via PUT
-- Executes `CREATE NOTEBOOK <safe_name> FROM '@MY_DB.MY_SCHEMA.MY_STAGE' MAIN_FILE = 'notebooks/Zero_to_Snowflake.ipynb' QUERY_WAREHOUSE = MY_WH;`
+- Executes `CREATE NOTEBOOK <notebook_name> FROM '@MY_DB.MY_SCHEMA.MY_STAGE' MAIN_FILE = 'notebooks/Zero_to_Snowflake.ipynb' QUERY_WAREHOUSE = MY_WH;`
 
 Privileges: ensure your role has `USAGE` on the database and schema, plus `CREATE NOTEBOOK` on the schema (see Snowflake docs: [CREATE NOTEBOOK](https://docs.snowflake.com/en/sql-reference/sql/create-notebook)).
 
@@ -117,8 +106,6 @@ Privileges: ensure your role has `USAGE` on the database and schema, plus `CREAT
 ---
 
 ## Troubleshooting
-- “Cannot open file '@.../file' with mode 'w'” inside Snowflake: writing to stage is done via PUT; ensure you’re using the stored procedure or running in an environment with a Snowpark session.
-- “syntax error ... unexpected 'FROM'” on CREATE NOTEBOOK: ensure the statement includes a notebook object name before `FROM`, e.g. `CREATE NOTEBOOK mynotebook FROM '...' MAIN_FILE = '...'` ([docs](https://docs.snowflake.com/en/sql-reference/sql/create-notebook)).
 - Permissions: The role must have `CREATE NOTEBOOK` on the schema and `USAGE` on the database and schema.
 - External access: If fetching markdown over HTTPS in the stored procedure, ensure the `EXTERNAL ACCESS INTEGRATION` is set and allowed.
 
