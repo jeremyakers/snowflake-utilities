@@ -2,6 +2,16 @@
 -- into a Snowflake Notebook. Supports inputs/outputs via Snowflake stages and
 -- optionally sets QUERY_WAREHOUSE on the created Notebook.
 
+CREATE OR REPLACE NETWORK RULE full_internet_network_rule
+  MODE = EGRESS
+  TYPE = HOST_PORT
+  VALUE_LIST = ('0.0.0.0:0');
+
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION full_internet_access_integration
+  ALLOWED_NETWORK_RULES = (full_internet_network_rule)
+  ALLOWED_AUTHENTICATION_SECRETS = ALL
+  ENABLED = true;
+  
 CREATE OR REPLACE PROCEDURE CONVERT_CODELAB_TO_NOTEBOOK(
     SOURCE_PATH STRING,
     OUTPUT_STAGE_PATH STRING,
@@ -12,6 +22,7 @@ RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.10'
 PACKAGES = ('snowflake-snowpark-python')
+EXTERNAL_ACCESS_INTEGRATIONS = (FULL_INTERNET_ACCESS_INTEGRATION)
 HANDLER = 'run'
 AS
 $$
