@@ -2,8 +2,7 @@
 -- into a Snowflake Notebook. Supports inputs/outputs via Snowflake stages and
 -- optionally sets QUERY_WAREHOUSE on the created Notebook.
 
--- Adjust DATABASE.SCHEMA as desired before running.
-CREATE OR REPLACE PROCEDURE UTIL_SCHEMA.CONVERT_CODELAB_TO_NOTEBOOK(
+CREATE OR REPLACE PROCEDURE CONVERT_CODELAB_TO_NOTEBOOK(
     SOURCE_PATH STRING,
     OUTPUT_STAGE_PATH STRING,
     MAIN_FILE_NAME STRING,
