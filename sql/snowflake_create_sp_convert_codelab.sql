@@ -5,7 +5,7 @@
 CREATE OR REPLACE NETWORK RULE full_internet_network_rule
   MODE = EGRESS
   TYPE = HOST_PORT
-  VALUE_LIST = ('0.0.0.0:0');
+  VALUE_LIST = ('0.0.0.0');
 
 CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION full_internet_access_integration
   ALLOWED_NETWORK_RULES = (full_internet_network_rule)
