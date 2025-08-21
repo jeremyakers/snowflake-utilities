@@ -3,6 +3,7 @@ import sys
 import os
 import re
 import json
+import tempfile
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -137,11 +138,11 @@ def replace_markdown_urls(text: str, base_url: str) -> str:
     def html_img_any(m):
         tag = m.group(0)
         # Extract src, alt, title with support for single/double quotes
-        src_m = re.search(r"src\s*=\s*'([^']+)'", tag, re.IGNORECASE) or re.search(r' src\s*=\s*"([^"]+)"', tag, re.IGNORECASE)
+        src_m = re.search(r"src\\s*=\\s*'([^']+)'", tag, re.IGNORECASE) or re.search(r' src\\s*=\\s*"([^"]+)"', tag, re.IGNORECASE)
         if not src_m:
             return tag
-        alt_m = re.search(r"alt\s*=\s*'([^']*)'", tag, re.IGNORECASE) or re.search(r' alt\s*=\s*"([^"]*)"', tag, re.IGNORECASE)
-        title_m = re.search(r"title\s*=\s*'([^']*)'", tag, re.IGNORECASE) or re.search(r' title\s*=\s*"([^"]*)"', tag, re.IGNORECASE)
+        alt_m = re.search(r"alt\\s*=\\s*'([^']*)'", tag, re.IGNORECASE) or re.search(r' alt\\s*=\\s*"([^"]*)"', tag, re.IGNORECASE)
+        title_m = re.search(r"title\\s*=\\s*'([^']*)'", tag, re.IGNORECASE) or re.search(r' title\\s*=\\s*"([^"]*)"', tag, re.IGNORECASE)
         src_val = src_m.group(1)
         alt_val = alt_m.group(1) if alt_m else "image"
         title_val = title_m.group(1) if title_m else "Image"
@@ -166,9 +167,9 @@ def detect_code_language(explicit_lang: str, code_text: str) -> str:
             return "python"
     # Heuristic detection
     sample = code_text.strip()
-    if re.search(r"\bSELECT\b|\bCREATE\b|\bWITH\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b", sample, re.IGNORECASE):
+    if re.search(r"\\bSELECT\\b|\\bCREATE\\b|\\bWITH\\b|\\bINSERT\\b|\\bUPDATE\\b|\\bDELETE\\b", sample, re.IGNORECASE):
         return "sql"
-    if re.search(r"\bimport\b|\bdef\b|\bclass\b|print\(\)|from\s+\w+\s+import", sample):
+    if re.search(r"\\bimport\\b|\\bdef\\b|\\bclass\\b|print\\(\\)|from\\s+\\w+\\s+import", sample):
         return "python"
     # Default to python if unknown
     return "python"
@@ -434,10 +435,14 @@ def convert(source_md: str, output_path: str = None, main_file_name: str | None 
             session = get_active_session()
         if SnowflakeFile is None or session is None:
             raise RuntimeError("Writing to a stage requires a Snowflake session.")
-        # Write notebook JSON to stage file
-        full_stage_path = output_path.rstrip("/") + "/" + filename
-        with SnowflakeFile.open(full_stage_path, "w") as f:  # type: ignore[attr-defined]
-            f.write(json.dumps(nb, ensure_ascii=False, indent=1))
+        # Write to a temporary local file, then PUT to stage
+        tmp_dir = tempfile.mkdtemp()
+        local_path = os.path.join(tmp_dir, filename)
+        with open(local_path, "w", encoding="utf-8") as f:
+            json.dump(nb, f, ensure_ascii=False, indent=1)
+        stage_dir = output_path.rstrip("/") + "/"
+        session.file.put(local_path, stage_dir, overwrite=True, auto_compress=False)
+        full_stage_path = stage_dir + filename
 
         # Issue CREATE NOTEBOOK FROM @stage MAIN_FILE='relpath'
         stage_root, rel_main = _split_stage_root_and_rel(output_path, filename)

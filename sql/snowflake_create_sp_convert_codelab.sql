@@ -29,6 +29,7 @@ $$
 import re
 import os
 import json
+import tempfile
 from urllib.parse import urlparse
 from urllib.request import urlopen
 from snowflake.snowpark.context import get_active_session
@@ -298,7 +299,7 @@ def build_notebook(md_body: str, base_url: str, header_text: str):
         "cells": cells,
     }
 
-    duration_line_pattern = re.compile(r"^Duration:\s*(\d+)\s*(minutes?|)?\s*$", flags=re.IGNORECASE | re.MULTILINE)
+    duration_line_pattern = re.compile(r"^Duration:\s*(\d+)\s*(minutes?|)?\s$", flags=re.IGNORECASE | re.MULTILINE)
     for c in notebook["cells"]:
         if c.get("cell_type") != "markdown":
             continue
@@ -332,9 +333,14 @@ def convert(source_md: str, output_stage_path: str, main_file_name: str | None =
     base_url = build_base_url(content_id) if content_id else ""
     title, nb = build_notebook(body, base_url, header_text)
     filename = main_file_name or (sanitize_filename(title) + ".ipynb")
-    full_stage_path = output_stage_path.rstrip("/") + "/" + filename
-    with SnowflakeFile.open(full_stage_path, "w") as f:
+    # Write to temp local file, then PUT to stage
+    tmp_dir = tempfile.mkdtemp()
+    local_path = os.path.join(tmp_dir, filename)
+    with open(local_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(nb, ensure_ascii=False, indent=1))
+    stage_dir = output_stage_path.rstrip("/") + "/"
+    session.file.put(local_path, stage_dir, overwrite=True, auto_compress=False)
+    full_stage_path = stage_dir + filename
     stage_root, rel_main = _split_stage_root_and_rel(output_stage_path, filename)
     create_stmt = f"CREATE NOTEBOOK FROM '{stage_root}'\n MAIN_FILE = '{rel_main}'"
     if query_warehouse:
