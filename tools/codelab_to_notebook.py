@@ -420,6 +420,16 @@ def _split_stage_root_and_rel(stage_path: str, filename: str) -> tuple[str, str]
     return stage_root, rel
 
 
+def make_notebook_object_name(preferred: str, fallback_filename: str) -> str:
+    base = preferred.strip() or os.path.splitext(fallback_filename)[0]
+    base = os.path.splitext(base)[0]
+    # Create an unquoted SQL identifier: starts with letter, only letters/digits/underscores
+    ident = re.sub(r"[^A-Za-z0-9_]", "_", base)
+    if not re.match(r"[A-Za-z]", ident):
+        ident = f"NB_{ident}" if ident else "NB_Default"
+    return ident
+
+
 def convert(source_md: str, output_path: str = None, main_file_name: str | None = None, query_warehouse: str | None = None, session=None):
     raw = fetch_text(source_md, session=session)
     header_text, body = extract_header_and_body(raw)
@@ -444,9 +454,10 @@ def convert(source_md: str, output_path: str = None, main_file_name: str | None 
         session.file.put(local_path, stage_dir, overwrite=True, auto_compress=False)
         full_stage_path = stage_dir + filename
 
-        # Issue CREATE NOTEBOOK FROM @stage MAIN_FILE='relpath'
+        # Issue CREATE NOTEBOOK <name> FROM @stage MAIN_FILE='relpath'
         stage_root, rel_main = _split_stage_root_and_rel(output_path, filename)
-        create_stmt = f"CREATE NOTEBOOK FROM '{stage_root}'\n MAIN_FILE = '{rel_main}'"
+        nb_name = make_notebook_object_name(title, filename)
+        create_stmt = f"CREATE NOTEBOOK {nb_name}\n FROM '{stage_root}'\n MAIN_FILE = '{rel_main}'"
         if query_warehouse:
             create_stmt += f"\n QUERY_WAREHOUSE = {query_warehouse}"
         create_stmt += ";"
